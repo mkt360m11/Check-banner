@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo Cáo Kiểm Tra Banner Quảng Cáo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-bottom: 30px; text-align: center; }
+        .header h1 { color: #333; font-size: 2.5em; margin-bottom: 10px; }
+        .header .timestamp { color: #666; font-size: 1.1em; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .summary-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); text-align: center; }
+        .summary-card h3 { color: #666; font-size: 0.9em; text-transform: uppercase; margin-bottom: 10px; }
+        .summary-card .number { font-size: 3em; font-weight: bold; margin-bottom: 5px; }
+        .summary-card.total .number { color: #667eea; }
+        .summary-card.pass .number { color: #10b981; }
+        .summary-card.fail .number { color: #ef4444; }
+        .site-card { background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; overflow: hidden; transition: transform 0.3s ease; }
+        .site-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+        .site-header { padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f0f0; }
+        .site-header.pass { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+        .site-header.fail { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
+        .site-url { font-size: 1.3em; font-weight: bold; word-break: break-all; }
+        .status-badge { padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 1.1em; background: rgba(255,255,255,0.3); }
+        .site-body { padding: 30px; }
+        .detail-row { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e5e7eb; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { font-weight: bold; color: #374151; margin-bottom: 8px; font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detail-value { color: #6b7280; word-break: break-all; line-height: 1.6; }
+        .detail-value code { background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 0.9em; }
+        .screenshot { margin-top: 15px; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .screenshot img { width: 100%; height: auto; display: block; }
+        .error-list { background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px 20px; border-radius: 8px; }
+        .error-list li { margin-left: 20px; margin-bottom: 8px; color: #991b1b; }
+        .bounding-box { background: #f0f9ff; border-left: 4px solid #0284c7; padding: 15px 20px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.9em; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8em; }
+            .summary { grid-template-columns: 1fr; }
+            .site-header { flex-direction: column; gap: 10px; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Báo Cáo Kiểm Tra Banner Quảng Cáo</h1>
+            <div class="timestamp">🕐 06/12/2025 11:30:10</div>
+        </div>
+        
+        <div class="summary">
+            <div class="summary-card total">
+                <h3>Tổng Số Sites</h3>
+                <div class="number">1</div>
+            </div>
+            <div class="summary-card pass">
+                <h3>✅ Thành Công</h3>
+                <div class="number">0</div>
+            </div>
+            <div class="summary-card fail">
+                <h3>❌ Thất Bại</h3>
+                <div class="number">1</div>
+            </div>
+        </div>
+        
+        
+        <div class="site-card">
+            <div class="site-header fail">
+                <div class="site-url">https://v2.keonhacaimoi.io</div>
+                <div class="status-badge">❌ FAIL</div>
+            </div>
+            <div class="site-body">
+                
+            <div class="detail-row">
+                <div class="detail-label">🎯 Selector Sử Dụng</div>
+                <div class="detail-value"><code>ins[data-revive-zoneid]</code></div>
+            </div>
+            
+            <div class="detail-row">
+                <div class="detail-label">� Chi Tiết 7 Banner</div>
+            </div>
+            
+                <div style="background: #f9fafb; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; color: #374151;">Banner #1</h4>
+                        <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">✅ OK</span>
+                    </div>
+                <div style="margin-bottom: 8px; word-break: break-all;"><strong>🔗 URL:</strong> <a href="https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=14&amp;zoneid=14&amp;sig=023985f511760737ad2cc8b56f6fb2a847bf9b7c13b32baea221057ac91e92df&amp;dest=https%3A%2F%2Fmb88.site%2F" target="_blank" rel="noopener noreferrer" style="font-size: 0.85em; color: #1f2937; word-break: break-all; text-decoration: underline;">https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=14&amp;zoneid=14&amp;sig=023985f511760737ad2cc8b56f6fb2a847bf9b7c13b32baea221057ac91e92df&amp;dest=https%3A%2F%2Fmb88.site%2F</a></div><div style="margin-bottom: 8px;"><strong>📐 Vị trí:</strong> X: 30px, Y: 175px, W: 446px, H: 19px</div><div style="color: #dc2626; margin-bottom: 8px;"><strong>⚠️ Lỗi:</strong> name 'decode_declared_dest_domain' is not defined</div>
+                    <div style="margin-top: 10px;">
+                        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <img src="evidence/v2.keonhacaimoi.io_banner_1.png" alt="Banner #1" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    </div>
+                <div style="background: #f9fafb; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; color: #374151;">Banner #2</h4>
+                        <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">✅ OK</span>
+                    </div>
+                <div style="margin-bottom: 8px; word-break: break-all;"><strong>🔗 URL:</strong> <a href="https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=14&amp;zoneid=15&amp;sig=3e0273eebc9b6ef2b5f3e9a07a8ccd12c9452356a1d167cb4966f59edbe0e703&amp;dest=https%3A%2F%2Fmb88.site%2F" target="_blank" rel="noopener noreferrer" style="font-size: 0.85em; color: #1f2937; word-break: break-all; text-decoration: underline;">https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=14&amp;zoneid=15&amp;sig=3e0273eebc9b6ef2b5f3e9a07a8ccd12c9452356a1d167cb4966f59edbe0e703&amp;dest=https%3A%2F%2Fmb88.site%2F</a></div><div style="margin-bottom: 8px;"><strong>📐 Vị trí:</strong> X: 491px, Y: 175px, W: 446px, H: 19px</div><div style="color: #dc2626; margin-bottom: 8px;"><strong>⚠️ Lỗi:</strong> name 'decode_declared_dest_domain' is not defined</div>
+                    <div style="margin-top: 10px;">
+                        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <img src="evidence/v2.keonhacaimoi.io_banner_2.png" alt="Banner #2" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    </div>
+                <div style="background: #f9fafb; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; color: #374151;">Banner #3</h4>
+                        <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">✅ OK</span>
+                    </div>
+                <div style="margin-bottom: 8px; word-break: break-all;"><strong>🔗 URL:</strong> <a href="https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=15&amp;zoneid=16&amp;sig=10b8362211ff1d1e147d344ad9e101d953306fe22ce55da1c21b0d7167bd7053&amp;dest=https%3A%2F%2Fsay88.com%2F" target="_blank" rel="noopener noreferrer" style="font-size: 0.85em; color: #1f2937; word-break: break-all; text-decoration: underline;">https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=15&amp;zoneid=16&amp;sig=10b8362211ff1d1e147d344ad9e101d953306fe22ce55da1c21b0d7167bd7053&amp;dest=https%3A%2F%2Fsay88.com%2F</a></div><div style="margin-bottom: 8px;"><strong>📐 Vị trí:</strong> X: 34px, Y: 1498px, W: 900px, H: 19px</div><div style="color: #dc2626; margin-bottom: 8px;"><strong>⚠️ Lỗi:</strong> name 'decode_declared_dest_domain' is not defined</div>
+                    <div style="margin-top: 10px;">
+                        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <img src="evidence/v2.keonhacaimoi.io_banner_3.png" alt="Banner #3" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    </div>
+                <div style="background: #f9fafb; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; color: #374151;">Banner #4</h4>
+                        <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">✅ OK</span>
+                    </div>
+                <div style="margin-bottom: 8px; word-break: break-all;"><strong>🔗 URL:</strong> <a href="https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=12&amp;zoneid=12&amp;sig=e1524fb6507d9ab0806907e30dde77b1e3c7ceadc532ee474ca812681764f603&amp;dest=https%3A%2F%2Fmb88.site%2F" target="_blank" rel="noopener noreferrer" style="font-size: 0.85em; color: #1f2937; word-break: break-all; text-decoration: underline;">https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=12&amp;zoneid=12&amp;sig=e1524fb6507d9ab0806907e30dde77b1e3c7ceadc532ee474ca812681764f603&amp;dest=https%3A%2F%2Fmb88.site%2F</a></div><div style="margin-bottom: 8px;"><strong>📐 Vị trí:</strong> X: 968px, Y: -303px, W: 285px, H: 19px</div><div style="color: #dc2626; margin-bottom: 8px;"><strong>⚠️ Lỗi:</strong> name 'decode_declared_dest_domain' is not defined</div>
+                    <div style="margin-top: 10px;">
+                        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <img src="evidence/v2.keonhacaimoi.io_banner_4.png" alt="Banner #4" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    </div>
+                <div style="background: #f9fafb; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; color: #374151;">Banner #5</h4>
+                        <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">✅ OK</span>
+                    </div>
+                <div style="margin-bottom: 8px; word-break: break-all;"><strong>🔗 URL:</strong> <a href="https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=12&amp;zoneid=13&amp;sig=22d6ccbf91e20913f33b69b2127cdaed4fc48d1e499961540471979ee77a3c9d&amp;dest=https%3A%2F%2Fmb88.site%2F" target="_blank" rel="noopener noreferrer" style="font-size: 0.85em; color: #1f2937; word-break: break-all; text-decoration: underline;">https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=12&amp;zoneid=13&amp;sig=22d6ccbf91e20913f33b69b2127cdaed4fc48d1e499961540471979ee77a3c9d&amp;dest=https%3A%2F%2Fmb88.site%2F</a></div><div style="margin-bottom: 8px;"><strong>📐 Vị trí:</strong> X: 968px, Y: 766px, W: 285px, H: 19px</div><div style="color: #dc2626; margin-bottom: 8px;"><strong>⚠️ Lỗi:</strong> name 'decode_declared_dest_domain' is not defined</div>
+                    <div style="margin-top: 10px;">
+                        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <img src="evidence/v2.keonhacaimoi.io_banner_5.png" alt="Banner #5" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    </div>
+                <div style="background: #f9fafb; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; color: #374151;">Banner #6</h4>
+                        <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">✅ OK</span>
+                    </div>
+                <div style="margin-bottom: 8px; word-break: break-all;"><strong>🔗 URL:</strong> <a href="https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=9&amp;zoneid=7&amp;sig=b789c72dfefe4fcf7e6c177b6f96bafcf4a8798c82afc15a896e4f80a0676553&amp;dest=https%3A%2F%2Fhay.win%2F%3Fa%3Dd7c288c624bf3dd4ed140f44af9bae79%26utm_campaign%3Dseo%26utm_source%3D1haywin.com%26utm_medium%3Dbutton%2B%26utm_term%3Dtop%2B%26utm_content%3Dregister%26referrer_domain%3D1haywin.com" target="_blank" rel="noopener noreferrer" style="font-size: 0.85em; color: #1f2937; word-break: break-all; text-decoration: underline;">https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=9&amp;zoneid=7&amp;sig=b789c72dfefe4fcf7e6c177b6f96bafcf4a8798c82afc15a896e4f80a0676553&amp;dest=https%3A%2F%2Fhay.win%2F%3Fa%3Dd7c288c624bf3dd4ed140f44af9bae79%26utm_campaign%3Dseo%26utm_source%3D1haywin.com%26utm_medium%3Dbutton%2B%26utm_term%3Dtop%2B%26utm_content%3Dregister%26referrer_domain%3D1haywin.com</a></div><div style="margin-bottom: 8px;"><strong>📐 Vị trí:</strong> X: 5px, Y: 627px, W: 630px, H: 88px</div><div style="color: #dc2626; margin-bottom: 8px;"><strong>⚠️ Lỗi:</strong> name 'decode_declared_dest_domain' is not defined</div>
+                    <div style="margin-top: 10px;">
+                        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <img src="evidence/v2.keonhacaimoi.io_banner_6.png" alt="Banner #6" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    </div>
+                <div style="background: #f9fafb; padding: 20px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; color: #374151;">Banner #7</h4>
+                        <span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em;">✅ OK</span>
+                    </div>
+                <div style="margin-bottom: 8px; word-break: break-all;"><strong>🔗 URL:</strong> <a href="https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=9&amp;zoneid=3&amp;sig=17f924c34f172108baebed325a38323a3959e0796efd08d194403ee518370620&amp;dest=https%3A%2F%2Fhay.win%2F%3Fa%3Dd7c288c624bf3dd4ed140f44af9bae79%26utm_campaign%3Dseo%26utm_source%3D1haywin.com%26utm_medium%3Dbutton%2B%26utm_term%3Dtop%2B%26utm_content%3Dregister%26referrer_domain%3D1haywin.com" target="_blank" rel="noopener noreferrer" style="font-size: 0.85em; color: #1f2937; word-break: break-all; text-decoration: underline;">https://revive.keonhacaimoi.io/www/delivery/cl.php?bannerid=9&amp;zoneid=3&amp;sig=17f924c34f172108baebed325a38323a3959e0796efd08d194403ee518370620&amp;dest=https%3A%2F%2Fhay.win%2F%3Fa%3Dd7c288c624bf3dd4ed140f44af9bae79%26utm_campaign%3Dseo%26utm_source%3D1haywin.com%26utm_medium%3Dbutton%2B%26utm_term%3Dtop%2B%26utm_content%3Dregister%26referrer_domain%3D1haywin.com</a></div><div style="margin-bottom: 8px;"><strong>📐 Vị trí:</strong> X: 645px, Y: 627px, W: 630px, H: 88px</div><div style="color: #dc2626; margin-bottom: 8px;"><strong>⚠️ Lỗi:</strong> name 'decode_declared_dest_domain' is not defined</div>
+                    <div style="margin-top: 10px;">
+                        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <img src="evidence/v2.keonhacaimoi.io_banner_7.png" alt="Banner #7" style="width: 100%; height: auto; display: block;">
+                        </div>
+                    </div>
+                    </div>
+                
+            <div class="detail-row">
+                <div class="detail-label">⚠️ Lỗi</div>
+                <ul class="error-list">
+                    <li>EXPECTED_URL_NOT_FOUND: Không tìm thấy banner nào dẫn đến hay.win. Tìm thấy: </li>
+                </ul>
+            </div>
+            
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>
