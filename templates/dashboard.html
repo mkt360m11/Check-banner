@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banner QC Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; }
+    .panel { box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06); }
+    .soft-border { border-color: rgb(226 232 240 / 0.9); }
+    .input-base { transition: all .2s ease; }
+    .input-base:focus { outline: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, .16); border-color: rgb(99 102 241); }
+    .thin-scrollbar { scrollbar-width: thin; }
+    .thin-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .thin-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+    .status-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+    .pulse-dot { width: .45rem; height: .45rem; border-radius: 999px; background: #10b981; }
+    .app-pane-height { max-height: calc(100vh - 9rem); }
+    .evidence-focus { box-shadow: 0 0 0 2px rgba(14, 165, 233, .35); border-color: rgb(56 189 248 / .7); }
+    #image-modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.85); }
+    #image-modal-content { margin: auto; display: block; max-width: 90%; max-height: 90%; }
+    .copy-icon { cursor: pointer; display: inline-block; margin-left: 6px; color: #94a3b8; vertical-align: middle; }
+    .copy-icon:hover { color: #334155; }
+    .banner-fail { border-color: rgb(225 29 72 / .6); box-shadow: 0 0 0 1px rgb(225 29 72 / .6); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div id="image-modal" onclick="this.style.display='none'">
+    <img id="image-modal-content" src="" alt="Full-size evidence" class="rounded-lg">
+  </div>
+
+  <div class="max-w-[96rem] mx-auto p-4 md:p-6 space-y-5">
+    <header class="panel bg-white border soft-border rounded-2xl p-4 md:p-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div class="space-y-1">
+        <h1 class="text-2xl font-bold">Banner QC Dashboard</h1>
+        <p class="text-sm text-slate-500">Kiểm tra banner, liên kết đích, domain mới nhất và theo dõi fail-case</p>
+        <div class="status-pill bg-emerald-50 text-emerald-700 border border-emerald-200 w-fit">
+          <span class="pulse-dot"></span>
+          Worker Ready
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="loadHistory()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-semibold">Lịch sử</button>
+        <button onclick="applyMvpPreset()" class="px-4 py-2 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg text-sm font-semibold">Preset MVP</button>
+        <button onclick="refreshDomainSource()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold">Refresh Domain API</button>
+      </div>
+    </header>
+
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+      <div class="lg:col-span-2 panel bg-white border soft-border rounded-2xl p-4 md:p-5 space-y-4">
+        <div>
+          <label class="text-xs font-semibold uppercase text-slate-500">Danh sách site (1 dòng 1 domain/url)</label>
+          <textarea id="sites" rows="8" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-3 text-sm font-mono thin-scrollbar" placeholder="https://example.com\nhttps://abc.com"></textarea>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold uppercase text-slate-500">Adserver keyword</label>
+            <input id="keyword" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" placeholder="haywin,febet" />
+          </div>
+          <div>
+            <label class="text-xs font-semibold uppercase text-slate-500">Kích thước chuẩn (vd: 300x250,336x280)</label>
+            <input id="size-rules" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" placeholder="300x250,728x90" />
+          </div>
+          <div>
+            <label class="text-xs font-semibold uppercase text-slate-500">Refresh/site</label>
+            <input id="refreshes" type="number" min="1" max="30" value="1" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" />
+          </div>
+          <div>
+            <label class="text-xs font-semibold uppercase text-slate-500">Concurrency</label>
+            <input id="concurrency" type="number" min="1" max="8" value="2" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" />
+          </div>
+          <div>
+            <label class="text-xs font-semibold uppercase text-slate-500">Tolerance kích thước (px)</label>
+            <input id="size-tolerance" type="number" min="0" max="50" value="10" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input id="enable-size-check" type="checkbox" class="rounded border-slate-300" />
+              Bật kiểm tra size mismatch (MVP demo nên để tắt)
+            </label>
+          </div>
+        </div>
+        <div class="sticky bottom-2 z-10 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border soft-border rounded-xl p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="text-xs text-slate-500">Tip: dùng <b>Preset MVP</b> để demo thu thập evidence nhanh.</div>
+          <div class="flex items-center gap-3">
+            <button id="run-btn" onclick="runCheck()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-400 text-white rounded-lg text-sm font-semibold">Run Banner Check</button>
+            <span id="status" class="text-sm text-slate-500"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel bg-white border soft-border rounded-2xl p-4 md:p-5 space-y-3 lg:sticky lg:top-4">
+        <h2 class="font-bold">Summary</h2>
+        <div id="summary" class="text-sm text-slate-600">Chưa có dữ liệu</div>
+        <hr class="my-2" />
+        <h3 class="font-semibold">Domain API</h3>
+        <div id="domain-source" class="text-xs text-slate-500">Đang tải...</div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+      <div class="lg:col-span-7 space-y-4">
+        <section class="panel bg-white border soft-border rounded-2xl overflow-hidden">
+          <div class="px-4 py-3 border-b soft-border flex items-center justify-between">
+            <h2 class="font-bold">Kết quả site</h2>
+            <button onclick="exportCsv()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold">Export CSV</button>
+          </div>
+          <div class="overflow-x-auto thin-scrollbar">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-600 text-xs uppercase">
+                <tr>
+                  <th class="px-3 py-2 text-left">Site</th>
+                  <th class="px-3 py-2 text-center">Refreshes</th>
+                  <th class="px-3 py-2 text-center">Banners</th>
+                  <th class="px-3 py-2 text-center">Fail Cases</th>
+                  <th class="px-3 py-2 text-left">Status</th>
+                  <th class="px-3 py-2 text-right">Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="result-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel bg-white border soft-border rounded-2xl p-4">
+          <h2 class="font-bold mb-2">Lịch sử chạy</h2>
+          <div id="history" class="text-sm text-slate-500 max-h-64 overflow-auto thin-scrollbar">Chưa tải lịch sử</div>
+        </section>
+      </div>
+
+      <section class="lg:col-span-5 panel bg-white border soft-border rounded-2xl overflow-hidden lg:sticky lg:top-4">
+        <div class="px-4 py-3 border-b soft-border flex flex-wrap items-center justify-between gap-2">
+          <h2 class="font-bold">Evidence & Banner Links</h2>
+          <div class="flex items-center gap-2">
+            <button onclick="openAllEvidence(true)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold">Mở tất cả</button>
+            <button onclick="openAllEvidence(false)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold">Thu gọn</button>
+          </div>
+        </div>
+        <div id="evidence-meta" class="px-4 py-2 border-b soft-border text-xs text-slate-500">Chưa có dữ liệu evidence</div>
+        <div id="evidence" class="text-sm text-slate-500 p-4 space-y-3 app-pane-height overflow-auto thin-scrollbar">Chưa có dữ liệu evidence</div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    let resultCache = [];
+
+    async function loadDomainSource() {
+      const res = await fetch('/api/domain_source');
+      const data = await res.json();
+      document.getElementById('domain-source').innerHTML = `
+        <div>API: <span class="font-mono">${data.domain_api || '(chưa cấu hình)'}</span></div>
+        <div>Domains hiện có: <b>${data.total}</b></div>
+      `;
+    }
+
+    async function refreshDomainSource() {
+      await fetch('/api/domain_source/refresh', { method: 'POST' });
+      await loadDomainSource();
+    }
+
+    function applyMvpPreset() {
+      document.getElementById('keyword').value = '';
+      document.getElementById('size-rules').value = '';
+      document.getElementById('refreshes').value = 1;
+      document.getElementById('concurrency').value = 1;
+      document.getElementById('size-tolerance').value = 10;
+      document.getElementById('enable-size-check').checked = false;
+      document.getElementById('status').textContent = 'Đã áp dụng Preset MVP';
+    }
+
+    async function runCheck() {
+      const status = document.getElementById('status');
+      const button = document.getElementById('run-btn');
+      const payload = {
+        sites: document.getElementById('sites').value,
+        adserver_keyword: document.getElementById('keyword').value,
+        size_rules: document.getElementById('size-rules').value,
+        refreshes: parseInt(document.getElementById('refreshes').value || '1'),
+        concurrency: parseInt(document.getElementById('concurrency').value || '2'),
+        size_tolerance: parseInt(document.getElementById('size-tolerance').value || '10'),
+        enable_size_check: document.getElementById('enable-size-check').checked
+      };
+
+      if (!payload.sites.trim()) {
+        alert('Vui lòng nhập site.');
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = 'Running...';
+      status.textContent = 'Đang chạy...';
+      try {
+        const res = await fetch('/api/banner/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        resultCache = data.results || [];
+        renderSummary(data.summary || {});
+        renderTable(resultCache);
+        renderEvidence(resultCache);
+        status.textContent = `Hoàn tất. File history: ${data.history_file || 'N/A'}`;
+        await loadHistory();
+      } catch (err) {
+        status.textContent = 'Lỗi: ' + err.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Run Banner Check';
+      }
+    }
+
+    function renderSummary(summary) {
+      document.getElementById('summary').innerHTML = `
+        <div>Total sites: <b>${summary.total_sites || 0}</b></div>
+        <div>PASS: <b class="text-emerald-600">${summary.pass_sites || 0}</b></div>
+        <div>FAIL: <b class="text-rose-600">${summary.fail_sites || 0}</b></div>
+        <div>Total banners: <b>${summary.total_banners || 0}</b></div>
+      `;
+    }
+
+    function renderTable(results) {
+      const body = document.getElementById('result-body');
+      if (!results.length) {
+        body.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-slate-400">Không có dữ liệu</td></tr>';
+        return;
+      }
+
+      body.innerHTML = results.map((item, idx) => `
+        <tr class="border-t border-slate-100 hover:bg-slate-50/70 align-top">
+          <td class="px-3 py-2 font-mono text-xs">${item.site || ''}</td>
+          <td class="px-3 py-2 text-center">${(item.refreshes || []).length}</td>
+          <td class="px-3 py-2 text-center">${item.banner_total || 0}</td>
+          <td class="px-3 py-2 text-center text-rose-600 font-semibold">${item.fail_cases || 0}</td>
+          <td class="px-3 py-2">${item.site_status === 'PASS' ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">PASS</span>' : '<span class="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-xs font-bold">FAIL</span>'}</td>
+          <td class="px-3 py-2 text-right"><button onclick="focusEvidenceByIndex(${idx})" class="px-2.5 py-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded text-xs font-semibold">Xem</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderEvidence(results) {
+      const evidence = document.getElementById('evidence');
+      const meta = document.getElementById('evidence-meta');
+      if (!results.length) {
+        evidence.innerHTML = 'Chưa có dữ liệu evidence';
+        meta.textContent = 'Chưa có dữ liệu evidence';
+        return;
+      }
+
+      const totalRefreshes = results.reduce((acc, site) => acc + ((site.refreshes || []).length), 0);
+      const totalBanners = results.reduce((acc, site) => acc + (site.banner_total || 0), 0);
+      meta.innerHTML = `Sites: <b>${results.length}</b> • Refreshes: <b>${totalRefreshes}</b> • Banners: <b>${totalBanners}</b>`;
+
+      evidence.innerHTML = results.map((site, siteIndex) => {
+        const refreshes = site.refreshes || [];
+        const refreshHtml = refreshes.map(refresh => {
+          const pageShot = refresh.page_screenshot
+            ? `<img src="data:image/png;base64,${refresh.page_screenshot}" class="w-full max-h-52 object-contain rounded border cursor-pointer hover:opacity-80" alt="page_screenshot" onclick="showImageModal(this.src)" />`
+            : '<div class="text-xs text-slate-400">Không có page screenshot</div>';
+
+          const bannerRows = (refresh.banners || []).map(banner => {
+            const elementShot = banner.element_screenshot
+              ? `<img src="data:image/png;base64,${banner.element_screenshot}" class="w-44 h-16 object-contain rounded border cursor-pointer hover:opacity-80" alt="element_screenshot" onclick="showImageModal(this.src)" />`
+              : '<div class="text-xs text-slate-400">No element screenshot</div>';
+            
+            const createLinkHtml = (link, isFinal = false) => {
+              if (!link || link === '—' || !link.startsWith('http')) {
+                return `<span>${link}</span>`;
+              }
+              const displayLink = isFinal ? link : (link.length > 100 ? link.substring(0, 97) + '...' : link);
+              const linkClass = isFinal ? "text-emerald-600" : "text-indigo-600";
+
+              return `<a class="${linkClass} underline" href="${link}" target="_blank" title="${link}">${displayLink}</a>
+                      <span class="copy-icon" onclick="copyToClipboard('${link}', this)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </span>`;
+            };
+
+            const linkHtml = createLinkHtml(banner.link);
+            const destHtml = createLinkHtml(banner.destination_link);
+            const redirectHtml = createLinkHtml(banner.redirect_target, true);
+            const finalDestHtml = createLinkHtml(banner.final_destination_link, true);
+
+            const destinationShot = banner.destination_screenshot
+              ? `<img src="data:image/png;base64,${banner.destination_screenshot}" class="w-full max-h-56 object-contain rounded border cursor-pointer hover:opacity-80" alt="destination_screenshot" onclick="showImageModal(this.src)" />`
+              : '<div class="text-xs text-slate-400">No destination screenshot</div>';
+            
+            const failClass = banner.qc_status === 'FAIL' ? 'banner-fail' : '';
+
+            return `
+              <div class="border rounded-lg p-2.5 space-y-2 bg-white ${failClass}">
+                <div class="text-xs"><b>#${banner.index}</b> | selector: <span class="font-mono">${banner.source_selector || 'n/a'}</span></div>
+                <div class="text-xs break-all">link: ${linkHtml}</div>
+                <div class="text-xs break-all">destination (query): ${destHtml}</div>
+                <div class="text-xs break-all">redirect target (resolved): ${redirectHtml}</div>
+                <div class="text-xs break-all font-semibold">final destination: ${finalDestHtml}</div>
+                <div class="text-xs">redirect by: ${banner.redirect_resolved_by || 'none'} | redirect status: ${banner.redirect_http_status ?? '—'}</div>
+                <div class="text-xs">status: <b>${banner.qc_status || 'N/A'}</b> | reasons: <span class="font-semibold text-rose-600">${(banner.qc_reasons || []).join(', ') || 'none'}</span></div>
+                ${elementShot}
+                ${destinationShot}
+              </div>
+            `;
+          }).join('');
+
+          return `
+            <details class="border border-slate-200 rounded-lg p-3 space-y-3 open:bg-slate-50/50" open>
+              <summary class="text-sm font-semibold cursor-pointer">Refresh ${refresh.refresh}</summary>
+              <div class="pt-2 space-y-3">
+                <div class="text-xs text-slate-600">Matched selectors: ${(refresh.selectors_matched || []).join(', ') || 'none'}</div>
+                ${pageShot}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${bannerRows || '<div class="text-xs text-slate-400">Không tìm thấy banner</div>'}</div>
+              </div>
+            </details>
+          `;
+        }).join('');
+
+        return `
+          <details id="evidence-site-${siteIndex}" class="mb-3 border border-slate-200 rounded-xl p-3 space-y-3" open>
+            <summary class="text-sm font-bold cursor-pointer">${site.site || ''}</summary>
+            <div class="pt-2">${refreshHtml || '<div class="text-xs text-slate-400">Không có refresh data</div>'}</div>
+          </details>
+        `;
+      }).join('');
+    }
+
+    function copyToClipboard(text, element) {
+      navigator.clipboard.writeText(text).then(() => {
+        const originalContent = element.innerHTML;
+        element.innerHTML = 'Copied!';
+        element.style.color = '#16a34a';
+        setTimeout(() => {
+          element.innerHTML = originalContent;
+          element.style.color = '';
+        }, 1500);
+      }).catch(err => {
+        console.error('Failed to copy: ', err);
+      });
+    }
+
+    function showImageModal(src) {
+      document.getElementById('image-modal-content').src = src;
+      document.getElementById('image-modal').style.display = 'flex';
+    }
+
+    function openAllEvidence(expand) {
+      document.querySelectorAll('#evidence details').forEach(el => {
+        el.open = !!expand;
+      });
+    }
+
+    function focusEvidenceByIndex(index) {
+      const evidencePanel = document.getElementById('evidence');
+      const node = document.getElementById(`evidence-site-${index}`);
+      if (!evidencePanel || !node) {
+        return;
+      }
+
+      node.open = true;
+      evidencePanel.querySelectorAll('.evidence-focus').forEach(el => el.classList.remove('evidence-focus'));
+      node.classList.add('evidence-focus');
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      setTimeout(() => {
+        node.classList.remove('evidence-focus');
+      }, 1600);
+    }
+
+    async function loadHistory() {
+      const res = await fetch('/api/history');
+      const data = await res.json();
+      const list = data.history || [];
+      if (!list.length) {
+        document.getElementById('history').innerHTML = 'Chưa có lịch sử.';
+        return;
+      }
+      document.getElementById('history').innerHTML = list.map(item => `
+        <button onclick="loadHistoryFile('${item.file}')" class="block w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200">
+          <div class="font-mono text-xs">${item.file}</div>
+          <div class="text-xs text-slate-400">${item.created_at}</div>
+        </button>
+      `).join('');
+    }
+
+    async function loadHistoryFile(file) {
+      const res = await fetch('/api/history/' + encodeURIComponent(file));
+      const data = await res.json();
+      resultCache = data.results || [];
+      renderSummary(data.summary || {});
+      renderTable(resultCache);
+      renderEvidence(resultCache);
+    }
+
+    function exportCsv() {
+      if (!resultCache.length) {
+        return;
+      }
+      const rows = [['site', 'refreshes', 'banner_total', 'pass_banners', 'fail_cases', 'site_status']];
+      resultCache.forEach(item => {
+        rows.push([
+          item.site || '',
+          (item.refreshes || []).length,
+          item.banner_total || 0,
+          item.pass_banners || 0,
+          item.fail_cases || 0,
+          item.site_status || 'FAIL'
+        ]);
+      });
+      const csv = rows.map(r => r.map(c => `"${String(c).replaceAll('"', '""')}"`).join(',')).join('\n');
+      const anchor = document.createElement('a');
+      anchor.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      anchor.download = 'banner_qc_results.csv';
+      anchor.click();
+    }
+
+    loadDomainSource();
+    loadHistory();
+  </script>
+</body>
+</html>
