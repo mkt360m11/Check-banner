@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import base64
+import json
+import os
 import re
+import tempfile
 import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
@@ -14,6 +18,13 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
 from rule_engine import evaluate_banner, parse_size_rules, summarize_site_result
+from proxy_manager import check_and_detect
+
+try:
+    from seleniumwire import webdriver as sw_webdriver
+    _HAS_SELENIUMWIRE = True
+except ImportError:
+    _HAS_SELENIUMWIRE = False
 
 
 HIGH_CONFIDENCE = [
@@ -100,7 +111,37 @@ def classify_position(y: int, page_height: int) -> str:
     return "Bottom"
 
 
-def build_driver() -> webdriver.Chrome:
+def _build_proxy_auth_extension(host: str, port: str, user: str, passwd: str) -> str:
+    """Create a temporary Chrome extension zip that configures an authenticated HTTP proxy."""
+    manifest = json.dumps({
+        "version": "1.0.0",
+        "manifest_version": 2,
+        "name": "ProxyAuth",
+        "permissions": [
+            "proxy", "tabs", "unlimitedStorage", "storage",
+            "<all_urls>", "webRequest", "webRequestBlocking"
+        ],
+        "background": {"scripts": ["background.js"]},
+        "minimum_chrome_version": "22.0.0"
+    })
+    background_js = (
+        f'var config={{"mode":"fixed_servers","rules":{{'
+        f'"singleProxy":{{"scheme":"http","host":"{host}","port":parseInt("{port}")}},'
+        f'"bypassList":["localhost","127.0.0.1"]}}}};\n'
+        f'chrome.proxy.settings.set({{value:config,scope:"regular"}},function(){{}});\n'
+        f'chrome.webRequest.onAuthRequired.addListener(\n'
+        f'  function(){{return{{authCredentials:{{username:"{user}",password:"{passwd}"}}}}}},\n'
+        f'  {{urls:["<all_urls>"]}},["blocking"]);\n'
+    )
+    ext_dir = tempfile.mkdtemp()
+    ext_path = os.path.join(ext_dir, "proxy_auth.crx")
+    with zipfile.ZipFile(ext_path, "w") as zf:
+        zf.writestr("manifest.json", manifest)
+        zf.writestr("background.js", background_js)
+    return ext_path
+
+
+def build_driver(proxy_str: str | None = None) -> webdriver.Chrome:
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -109,9 +150,46 @@ def build_driver() -> webdriver.Chrome:
     options.add_argument("--window-size=1920,1080")
 
     service = Service(ChromeDriverManager().install())
+
+    if proxy_str:
+        parts = proxy_str.strip().split(':')
+        if len(parts) >= 4:
+            host, port, user, passwd = parts[0], parts[1], parts[2], parts[3]
+            if _HAS_SELENIUMWIRE:
+                sw_options = {
+                    'proxy': {
+                        'http': f'http://{user}:{passwd}@{host}:{port}',
+                        'https': f'http://{user}:{passwd}@{host}:{port}',
+                        'no_proxy': 'localhost,127.0.0.1'
+                    }
+                }
+                driver = sw_webdriver.Chrome(service=service, options=options, seleniumwire_options=sw_options)
+                driver.set_page_load_timeout(30)
+                return driver
+            else:
+                # Build a Chrome extension that injects proxy credentials
+                ext_path = _build_proxy_auth_extension(host, port, user, passwd)
+                options.add_extension(ext_path)
+        else:
+            options.add_argument(f"--proxy-server=http://{parts[0]}:{parts[1]}")
+
     driver = webdriver.Chrome(service=service, options=options)
     driver.set_page_load_timeout(30)
     return driver
+
+
+def _pick_live_proxy(proxy_list: list[str]) -> tuple[str | None, list[dict]]:
+    """
+    Try each proxy in order, return the first alive one.
+    Returns (proxy_str_or_None, health_report_list).
+    """
+    report = []
+    for proxy_str in proxy_list:
+        result = check_and_detect(proxy_str, timeout=10)
+        report.append(result)
+        if result.get('alive'):
+            return proxy_str, report
+    return None, report
 
 
 def resolve_link(element, base_url: str = "") -> str:
@@ -240,27 +318,46 @@ def resolve_image_src(element, base_url: str = "") -> str:
     return ""
 
 
-def check_link_status(link: str) -> tuple[str, int | str, bool]:
+def check_link_status(link: str, proxy_str: str | None = None) -> tuple[str, int | str, bool]:
     if not link or link == "—" or not link.startswith("http"):
         return "", "—", False
 
+    proxies = None
+    if proxy_str:
+        parts = proxy_str.strip().split(":")
+        if len(parts) >= 4:
+            proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
+        else:
+            proxy_url = f"http://{parts[0]}:{parts[1]}"
+        proxies = {"http": proxy_url, "https": proxy_url}
+
     try:
         domain = urlparse(link).netloc.replace("www.", "").lower()
-        response = requests.head(link, timeout=8, allow_redirects=True)
+        response = requests.head(link, timeout=8, allow_redirects=True, proxies=proxies)
         return domain, response.status_code, True
     except Exception:
         return "", "—", False
 
 
-def resolve_redirect_with_requests(link: str) -> tuple[str, str, int | str]:
+def resolve_redirect_with_requests(link: str, proxy_str: str | None = None) -> tuple[str, str, int | str]:
     if not link or link == "—" or not link.startswith("http"):
         return "", "", "—"
+
+    proxies = None
+    if proxy_str:
+        parts = proxy_str.strip().split(':')
+        if len(parts) >= 4:
+            proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
+        else:
+            proxy_url = f"http://{parts[0]}:{parts[1]}"
+        proxies = {'http': proxy_url, 'https': proxy_url}
 
     try:
         response = requests.get(
             link,
             timeout=12,
             allow_redirects=True,
+            proxies=proxies,
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -526,16 +623,48 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
     max_redirect_checks_per_site = max(0, min(int(payload.get("max_redirect_checks_per_site", 20)), 200))
     banner_load_delay_seconds = max(2.0, min(float(payload.get("banner_load_delay_seconds", 2.0)), 10.0))
 
+    # Parse proxy list (newline or comma separated)
+    proxy_raw = payload.get("proxy", "").strip()
+    proxy_list = [p.strip() for p in re.split(r'[\n,]', proxy_raw) if p.strip()]
+    require_proxy = parse_bool(payload.get("require_proxy"), default=bool(proxy_list))
+
+    # Validate & pick a live proxy
+    active_proxy: str | None = None
+    proxy_health_report: list[dict] = []
+    proxy_error: str | None = None
+
+    if proxy_list:
+        active_proxy, proxy_health_report = _pick_live_proxy(proxy_list)
+        if active_proxy is None:
+            proxy_error = f"All {len(proxy_list)} proxy(ies) are dead: " + ", ".join(
+                f"{r['raw']} [{r.get('isp','?')}]" for r in proxy_health_report
+            )
+            if require_proxy:
+                return {
+                    "error": proxy_error,
+                    "proxy_health": proxy_health_report,
+                    "results": [],
+                    "summary": {"total_sites": 0, "fail_sites": 0, "pass_sites": 0},
+                }
+        else:
+            dead_count = sum(1 for r in proxy_health_report if not r.get('alive'))
+            if dead_count:
+                proxy_error = f"Skipped {dead_count} dead proxy(ies), using: {active_proxy}"
+
     site_list = [line.strip() for line in sites_raw.splitlines() if line.strip()]
     latest_domains = latest_domains or set()
 
     def check_one_site(site_url: str) -> dict:
         site_result: dict = {"site": site_url, "refreshes": []}
+        if active_proxy:
+            site_result["proxy_used"] = active_proxy
+        if proxy_error:
+            site_result["proxy_warning"] = proxy_error
         driver = None
         redirect_checks_count = 0
 
         try:
-            driver = build_driver()
+            driver = build_driver(active_proxy)
         except Exception as exc:
             site_result["error"] = f"Driver Error: {exc}"
             return site_result
@@ -598,7 +727,7 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
                         link = resolve_link(element, base_url=url)
                         banner_info["link"] = link
                         banner_info["destination_link"] = extract_destination_link(link)
-                        domain, http_status, has_http = check_link_status(link)
+                        domain, http_status, has_http = check_link_status(link, proxy_str=active_proxy)
                         banner_info["domain"] = domain or ""
                         banner_info["http_status"] = http_status
                         banner_info["match_adserver"] = (
@@ -616,7 +745,7 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
 
                         if resolve_redirect_target and redirect_checks_count < max_redirect_checks_per_site:
                             redirect_checks_count += 1
-                            req_final_url, req_final_domain, req_status = resolve_redirect_with_requests(link)
+                            req_final_url, req_final_domain, req_status = resolve_redirect_with_requests(link, proxy_str=active_proxy)
                             if req_final_url and req_final_url != link:
                                 redirect_target = req_final_url
                                 redirect_domain = req_final_domain
@@ -638,7 +767,7 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
                                     redirect_target = browser_final_url
                                     redirect_domain = browser_final_domain
                                     redirect_resolved_by = "browser_redirect"
-                                    _, final_status, _ = check_link_status(redirect_target)
+                                    _, final_status, _ = check_link_status(redirect_target, proxy_str=active_proxy)
                                     redirect_status = final_status
                                 if browser_shot:
                                     destination_screenshot = browser_shot
@@ -744,11 +873,14 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
 
     return {
         "results": results,
+        "proxy_health": proxy_health_report if proxy_health_report else None,
+        "proxy_error": proxy_error,
         "summary": {
             "total_sites": total_sites,
             "pass_sites": pass_sites,
             "fail_sites": fail_sites,
             "total_banners": total_banners,
+            "proxy_used": active_proxy,
             "refreshes": refresh_count,
             "size_rules": [f"{rule.width}x{rule.height}" for rule in size_rules],
             "size_tolerance": tolerance,

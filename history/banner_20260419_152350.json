@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "site": "https://keonhacai.top/",
+      "refreshes": [
+        {
+          "refresh": 1,
+          "banners": [],
+          "banner_count": 0,
+          "selector_used": null,
+          "selectors_matched": []
+        }
+      ],
+      "proxy_used": "171.229.255.5:14617:ifqre_hackm:SRomhUsZ",
+      "site_status": "FAIL",
+      "banner_total": 0,
+      "pass_banners": 0,
+      "fail_cases": 1,
+      "links_found": [],
+      "redirect_targets_found": []
+    }
+  ],
+  "proxy_health": [
+    {
+      "raw": "171.229.255.5:14617:ifqre_hackm:SRomhUsZ",
+      "ip": "171.229.255.5",
+      "port": "14617",
+      "alive": true,
+      "isp": "Viettel Corporation",
+      "org": "VIETEL",
+      "country": "Vietnam",
+      "query_ip": "171.229.218.90",
+      "region": "Hanoi"
+    }
+  ],
+  "proxy_error": null,
+  "summary": {
+    "total_sites": 1,
+    "pass_sites": 0,
+    "fail_sites": 1,
+    "total_banners": 0,
+    "proxy_used": "171.229.255.5:14617:ifqre_hackm:SRomhUsZ",
+    "refreshes": 1,
+    "size_rules": [],
+    "size_tolerance": 10,
+    "enable_size_check": false,
+    "resolve_redirect_target": true,
+    "capture_destination_screenshot": true,
+    "max_redirect_checks_per_site": 20,
+    "banner_load_delay_seconds": 2.0,
+    "keyword": ""
+  }
+}
