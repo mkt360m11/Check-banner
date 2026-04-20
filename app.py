@@ -193,25 +193,53 @@ def action_domain_source():
     )
 
 
-PROXY_FILE = os.path.join(os.path.dirname(__file__), "proxies.txt")
+import sqlite3 as _sqlite3
+
+PROXY_DB = os.getenv("PROXY_DB", os.path.join(os.path.dirname(__file__), "proxies.db"))
+_DASHBOARD_CHAT = ""  # app.py uses chat_id='' as the dashboard pool
 
 
-def _load_proxy_file() -> list[str]:
-    try:
-        with open(PROXY_FILE, "r") as f:
-            return [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        return []
+def _db() -> _sqlite3.Connection:
+    conn = _sqlite3.connect(PROXY_DB, check_same_thread=False)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "proxies" in tables:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(proxies)")}
+        if "chat_id" not in cols:
+            conn.execute("ALTER TABLE proxies RENAME TO _proxies_old")
+            conn.execute(
+                "CREATE TABLE proxies (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "proxy TEXT NOT NULL, chat_id TEXT NOT NULL DEFAULT '', UNIQUE(proxy, chat_id))"
+            )
+            conn.execute("INSERT INTO proxies (proxy, chat_id) SELECT proxy, '' FROM _proxies_old")
+            conn.execute("DROP TABLE _proxies_old")
+            conn.commit()
+    else:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS proxies (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "proxy TEXT NOT NULL, chat_id TEXT NOT NULL DEFAULT '', UNIQUE(proxy, chat_id))"
+        )
+    return conn
 
 
-def _save_proxy_file(proxies: list[str]) -> None:
-    with open(PROXY_FILE, "w") as f:
-        f.write("\n".join(proxies))
+def _load_proxies() -> list[str]:
+    with _db() as conn:
+        return [r[0] for r in conn.execute(
+            "SELECT proxy FROM proxies WHERE chat_id = ? ORDER BY id", (_DASHBOARD_CHAT,)
+        )]
+
+
+def _save_proxies(proxies: list[str]) -> None:
+    with _db() as conn:
+        conn.execute("DELETE FROM proxies WHERE chat_id = ?", (_DASHBOARD_CHAT,))
+        conn.executemany(
+            "INSERT OR IGNORE INTO proxies (proxy, chat_id) VALUES (?, ?)",
+            [(p, _DASHBOARD_CHAT) for p in proxies],
+        )
 
 
 @app.route("/api/proxies", methods=["GET"])
 def get_proxies():
-    return jsonify({"proxies": _load_proxy_file()})
+    return jsonify({"proxies": _load_proxies()})
 
 
 @app.route("/api/proxies", methods=["POST"])
@@ -219,7 +247,7 @@ def save_proxies():
     data = request.get_json(silent=True) or {}
     raw = data.get("proxies", "")
     lines = [line.strip() for line in raw.splitlines() if line.strip()]
-    _save_proxy_file(lines)
+    _save_proxies(lines)
     return jsonify({"saved": len(lines)})
 
 
@@ -229,25 +257,24 @@ def banner_check():
 
     # Merge saved proxy list if UI textarea is empty
     if not str(payload.get("proxy", "")).strip():
-        saved = _load_proxy_file()
+        saved = _load_proxies()
         if saved:
             payload["proxy"] = "\n".join(saved)
 
     latest_domains = fetch_latest_domains(force=False)
     result = run_banner_check(payload, latest_domains=latest_domains)
 
-    # Remove dead proxies from persistent file
+    # Remove dead proxies from DB
     health = result.get("proxy_health") or []
     if health:
-        alive = [r["raw"] for r in health if r.get("alive")]
-        current = _load_proxy_file()
         dead = {r["raw"] for r in health if not r.get("alive")}
+        alive = [r["raw"] for r in health if r.get("alive")]
+        current = _load_proxies()
         updated = [p for p in current if p not in dead]
-        # Add newly confirmed alive proxies not yet in file
         for p in alive:
             if p not in updated:
                 updated.append(p)
-        _save_proxy_file(updated)
+        _save_proxies(updated)
         result["proxy_list_updated"] = {"removed": list(dead), "remaining": len(updated)}
 
     filename = store.save(result)
