@@ -42,8 +42,7 @@
       </div>
       <div class="flex flex-wrap gap-2">
         <button onclick="loadHistory()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-semibold">Lịch sử</button>
-        <button onclick="applyMvpPreset()" class="px-4 py-2 bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg text-sm font-semibold">Preset MVP</button>
-        <button onclick="refreshDomainSource()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold">Refresh Domain API</button>
+        <button onclick="refreshDomainSource()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold">Refresh Domain</button>
       </div>
     </header>
 
@@ -55,14 +54,6 @@
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-xs font-semibold uppercase text-slate-500">Adserver keyword</label>
-            <input id="keyword" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" placeholder="haywin,febet" />
-          </div>
-          <div>
-            <label class="text-xs font-semibold uppercase text-slate-500">Kích thước chuẩn (vd: 300x250,336x280)</label>
-            <input id="size-rules" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" placeholder="300x250,728x90" />
-          </div>
-          <div>
             <label class="text-xs font-semibold uppercase text-slate-500">Refresh/site</label>
             <input id="refreshes" type="number" min="1" max="30" value="1" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" />
           </div>
@@ -70,19 +61,17 @@
             <label class="text-xs font-semibold uppercase text-slate-500">Concurrency</label>
             <input id="concurrency" type="number" min="1" max="8" value="2" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" />
           </div>
-          <div>
-            <label class="text-xs font-semibold uppercase text-slate-500">Tolerance kích thước (px)</label>
-            <input id="size-tolerance" type="number" min="0" max="50" value="10" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" />
-          </div>
-          <div class="md:col-span-2">
-            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-              <input id="enable-size-check" type="checkbox" class="rounded border-slate-300" />
-              Bật kiểm tra size mismatch (MVP demo nên để tắt)
-            </label>
-          </div>
+        </div>
+        <div class="space-y-2">
+          <label class="text-xs font-semibold uppercase text-slate-500">Danh sách Proxy (1 dòng 1 proxy, định dạng <code class="font-mono bg-slate-100 px-1 rounded">ip:port</code> hoặc <code class="font-mono bg-slate-100 px-1 rounded">ip:port:user:pass</code>)</label>
+          <textarea id="proxy-list" rows="3" class="input-base mt-1 w-full border border-slate-300 rounded-lg p-3 text-sm font-mono thin-scrollbar" placeholder="1.2.3.4:8080&#10;5.6.7.8:3128:username:password"></textarea>
+          <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+            <input id="require-proxy" type="checkbox" class="rounded border-slate-300" checked />
+            Bắt buộc qua proxy (nếu tất cả proxy chết sẽ báo lỗi, không chạy check)
+          </label>
         </div>
         <div class="sticky bottom-2 z-10 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border soft-border rounded-xl p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div class="text-xs text-slate-500">Tip: dùng <b>Preset MVP</b> để demo thu thập evidence nhanh.</div>
+          <div></div>
           <div class="flex items-center gap-3">
             <button id="run-btn" onclick="runCheck()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-400 text-white rounded-lg text-sm font-semibold">Run Banner Check</button>
             <span id="status" class="text-sm text-slate-500"></span>
@@ -104,7 +93,7 @@
         <section class="panel bg-white border soft-border rounded-2xl overflow-hidden">
           <div class="px-4 py-3 border-b soft-border flex items-center justify-between">
             <h2 class="font-bold">Kết quả site</h2>
-            <button onclick="exportCsv()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold">Export CSV</button>
+            <button onclick="exportFile('csv')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold">Export CSV</button>
           </div>
           <div class="overflow-x-auto thin-scrollbar">
             <table class="w-full text-sm">
@@ -145,6 +134,7 @@
 
   <script>
     let resultCache = [];
+    let currentHistoryFile = null;
 
     async function loadDomainSource() {
       const res = await fetch('/api/domain_source');
@@ -175,12 +165,10 @@
       const button = document.getElementById('run-btn');
       const payload = {
         sites: document.getElementById('sites').value,
-        adserver_keyword: document.getElementById('keyword').value,
-        size_rules: document.getElementById('size-rules').value,
         refreshes: parseInt(document.getElementById('refreshes').value || '1'),
         concurrency: parseInt(document.getElementById('concurrency').value || '2'),
-        size_tolerance: parseInt(document.getElementById('size-tolerance').value || '10'),
-        enable_size_check: document.getElementById('enable-size-check').checked
+        proxy: document.getElementById('proxy-list').value,
+        require_proxy: document.getElementById('require-proxy').checked
       };
 
       if (!payload.sites.trim()) {
@@ -199,10 +187,31 @@
         });
         const data = await res.json();
         resultCache = data.results || [];
+        currentHistoryFile = data.history_file || null;
         renderSummary(data.summary || {});
         renderTable(resultCache);
-        renderEvidence(resultCache);
-        status.textContent = `Hoàn tất. File history: ${data.history_file || 'N/A'}`;
+
+        // Sync proxy list: reload from server (dead ones already removed by backend)
+        await loadProxies();
+
+        if (data.error && !resultCache.length) {
+          const proxyHealth = (data.proxy_health || []).map(p =>
+            `<div class="font-mono text-xs mt-1">• ${p.raw} — <b class="${p.alive ? 'text-emerald-600' : 'text-rose-600'}">${p.alive ? 'alive' : 'dead'}</b> [${p.isp || '?'}, ${p.country || '?'}]</div>`
+          ).join('');
+          document.getElementById('evidence').innerHTML = `
+            <div class="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+              <div class="font-semibold text-rose-700">Lỗi — Không thể chạy check</div>
+              <div class="text-sm text-rose-600">${data.error}</div>
+              ${proxyHealth}
+              <div class="text-xs text-slate-500 mt-3">Bỏ chọn <b>Bắt buộc qua proxy</b> nếu muốn chạy không qua proxy khi proxy chết.</div>
+            </div>`;
+          document.getElementById('evidence-meta').textContent = 'Check thất bại';
+          status.textContent = `Lỗi proxy: tất cả proxy đều chết.`;
+        } else {
+          renderEvidence(resultCache);
+          status.textContent = `Hoàn tất. File history: ${data.history_file || 'N/A'}`;
+        }
+
         await loadHistory();
       } catch (err) {
         status.textContent = 'Lỗi: ' + err.message;
@@ -213,11 +222,15 @@
     }
 
     function renderSummary(summary) {
+      const proxyLine = summary.proxy_used
+        ? `<div>Proxy: <b class="text-indigo-600 font-mono text-xs">${summary.proxy_used}</b></div>`
+        : (summary.proxy_error ? `<div class="text-rose-600">Proxy Error: ${summary.proxy_error}</div>` : '');
       document.getElementById('summary').innerHTML = `
         <div>Total sites: <b>${summary.total_sites || 0}</b></div>
         <div>PASS: <b class="text-emerald-600">${summary.pass_sites || 0}</b></div>
         <div>FAIL: <b class="text-rose-600">${summary.fail_sites || 0}</b></div>
         <div>Total banners: <b>${summary.total_banners || 0}</b></div>
+        ${proxyLine}
       `;
     }
 
@@ -387,35 +400,43 @@
       const res = await fetch('/api/history/' + encodeURIComponent(file));
       const data = await res.json();
       resultCache = data.results || [];
+      currentHistoryFile = file;
       renderSummary(data.summary || {});
       renderTable(resultCache);
       renderEvidence(resultCache);
     }
 
-    function exportCsv() {
-      if (!resultCache.length) {
+    function exportFile(format) {
+      if (!currentHistoryFile) {
+        alert('Chưa có dữ liệu để export. Hãy chạy check hoặc load lịch sử trước.');
         return;
       }
-      const rows = [['site', 'refreshes', 'banner_total', 'pass_banners', 'fail_cases', 'site_status']];
-      resultCache.forEach(item => {
-        rows.push([
-          item.site || '',
-          (item.refreshes || []).length,
-          item.banner_total || 0,
-          item.pass_banners || 0,
-          item.fail_cases || 0,
-          item.site_status || 'FAIL'
-        ]);
-      });
-      const csv = rows.map(r => r.map(c => `"${String(c).replaceAll('"', '""')}"`).join(',')).join('\n');
-      const anchor = document.createElement('a');
-      anchor.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-      anchor.download = 'banner_qc_results.csv';
-      anchor.click();
+      window.location.href = `/api/export/${format}/` + encodeURIComponent(currentHistoryFile);
     }
+
+    async function loadProxies() {
+      const res = await fetch('/api/proxies');
+      const data = await res.json();
+      const el = document.getElementById('proxy-list');
+      if (data.proxies && data.proxies.length) {
+        el.value = data.proxies.join('\n');
+      }
+    }
+
+    async function saveProxies() {
+      const raw = document.getElementById('proxy-list').value;
+      await fetch('/api/proxies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proxies: raw })
+      });
+    }
+
+    document.getElementById('proxy-list').addEventListener('blur', saveProxies);
 
     loadDomainSource();
     loadHistory();
+    loadProxies();
   </script>
 </body>
 </html>

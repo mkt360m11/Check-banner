@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import csv
+import io
 import os
+import re
 import time
 from datetime import datetime, timezone
 from threading import Lock
@@ -8,7 +11,7 @@ from urllib.parse import urlparse
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 from banner_checker import run_banner_check
 from history_store import HistoryStore
@@ -190,11 +193,78 @@ def action_domain_source():
     )
 
 
+import sqlite3 as _sqlite3
+
+PROXY_DB = os.getenv("PROXY_DB", os.path.join(os.path.dirname(__file__), "proxies.db"))
+_DASHBOARD_CHAT = ""  # app.py uses chat_id='' as the dashboard pool
+
+
+def _db() -> _sqlite3.Connection:
+    conn = _sqlite3.connect(PROXY_DB, check_same_thread=False)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "proxies" in tables:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(proxies)")}
+        if "chat_id" not in cols:
+            conn.execute("ALTER TABLE proxies RENAME TO _proxies_old")
+            conn.execute(
+                "CREATE TABLE proxies (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "proxy TEXT NOT NULL, chat_id TEXT NOT NULL DEFAULT '', UNIQUE(proxy, chat_id))"
+            )
+            conn.execute("INSERT INTO proxies (proxy, chat_id) SELECT proxy, '' FROM _proxies_old")
+            conn.execute("DROP TABLE _proxies_old")
+            conn.commit()
+    else:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS proxies (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "proxy TEXT NOT NULL, chat_id TEXT NOT NULL DEFAULT '', UNIQUE(proxy, chat_id))"
+        )
+    return conn
+
+
+def _load_proxies() -> list[str]:
+    with _db() as conn:
+        return [r[0] for r in conn.execute(
+            "SELECT proxy FROM proxies WHERE chat_id = ? ORDER BY id", (_DASHBOARD_CHAT,)
+        )]
+
+
+def _save_proxies(proxies: list[str]) -> None:
+    with _db() as conn:
+        conn.execute("DELETE FROM proxies WHERE chat_id = ?", (_DASHBOARD_CHAT,))
+        conn.executemany(
+            "INSERT OR IGNORE INTO proxies (proxy, chat_id) VALUES (?, ?)",
+            [(p, _DASHBOARD_CHAT) for p in proxies],
+        )
+
+
+
+@app.route("/api/proxies", methods=["GET"])
+def get_proxies():
+    return jsonify({"proxies": _load_proxies()})
+
+
+@app.route("/api/proxies", methods=["POST"])
+def save_proxies():
+    data = request.get_json(silent=True) or {}
+    raw = data.get("proxies", "")
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    _save_proxies(lines)
+    return jsonify({"saved": len(lines)})
+
+
 @app.route("/api/banner/check", methods=["POST"])
 def banner_check():
     payload = request.get_json(silent=True) or {}
+
+    # Merge saved proxy list if UI textarea is empty
+    if not str(payload.get("proxy", "")).strip():
+        saved = _load_proxies()
+        if saved:
+            payload["proxy"] = "\n".join(saved)
+
     latest_domains = fetch_latest_domains(force=False)
     result = run_banner_check(payload, latest_domains=latest_domains)
+
     filename = store.save(result)
     result["history_file"] = filename
     return jsonify(result)
@@ -212,6 +282,76 @@ def history_detail(filename: str):
         return jsonify(data)
     except FileNotFoundError:
         return jsonify({"error": "history_not_found"}), 404
+
+
+_EXPORT_COLUMNS = [
+    "run_at", "site", "refresh_no", "banner_index", "position",
+    "width", "height", "selector", "domain",
+    "link", "destination_link", "redirect_target", "final_destination_link",
+    "http_status", "redirect_http_status", "redirect_resolved_by",
+    "qc_status", "qc_reasons",
+]
+
+
+def _parse_run_at(filename: str) -> str:
+    m = re.search(r"(\d{8})_(\d{6})", filename)
+    if m:
+        d, t = m.group(1), m.group(2)
+        return f"{d[:4]}-{d[4:6]}-{d[6:8]} {t[:2]}:{t[2:4]}:{t[4:6]}"
+    return filename
+
+
+def _flatten_banners(data: dict, filename: str) -> list[dict]:
+    run_at = _parse_run_at(filename)
+    rows = []
+    for site_result in data.get("results", []):
+        site = site_result.get("site", "")
+        for refresh in site_result.get("refreshes", []):
+            for banner in refresh.get("banners", []):
+                rows.append({
+                    "run_at": run_at,
+                    "site": site,
+                    "refresh_no": refresh.get("refresh", ""),
+                    "banner_index": banner.get("index", ""),
+                    "position": banner.get("position", ""),
+                    "width": banner.get("w", ""),
+                    "height": banner.get("h", ""),
+                    "selector": banner.get("source_selector", ""),
+                    "domain": banner.get("domain", ""),
+                    "link": banner.get("link", ""),
+                    "destination_link": banner.get("destination_link", ""),
+                    "redirect_target": banner.get("redirect_target", ""),
+                    "final_destination_link": banner.get("final_destination_link", ""),
+                    "http_status": banner.get("http_status", ""),
+                    "redirect_http_status": banner.get("redirect_http_status", ""),
+                    "redirect_resolved_by": banner.get("redirect_resolved_by", ""),
+                    "qc_status": banner.get("qc_status", ""),
+                    "qc_reasons": "|".join(banner.get("qc_reasons") or []),
+                })
+    return rows
+
+
+
+@app.route("/api/export/csv/<path:filename>")
+def export_csv(filename: str):
+    try:
+        data = store.load(filename)
+    except FileNotFoundError:
+        return jsonify({"error": "history_not_found"}), 404
+
+    rows = _flatten_banners(data, filename)
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=_EXPORT_COLUMNS)
+    writer.writeheader()
+    writer.writerows(rows)
+
+    download_name = filename.replace(".json", "_banner_detail.csv")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
+
 
 
 if __name__ == "__main__":
