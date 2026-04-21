@@ -18,7 +18,6 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
 from rule_engine import evaluate_banner, parse_size_rules, summarize_site_result
-from proxy_manager import check_and_detect
 
 try:
     from seleniumwire import webdriver as sw_webdriver
@@ -178,18 +177,6 @@ def build_driver(proxy_str: str | None = None) -> webdriver.Chrome:
     return driver
 
 
-def _pick_live_proxy(proxy_list: list[str]) -> tuple[str | None, list[dict]]:
-    """
-    Try each proxy in order, return the first alive one.
-    Returns (proxy_str_or_None, health_report_list).
-    """
-    report = []
-    for proxy_str in proxy_list:
-        result = check_and_detect(proxy_str, timeout=10)
-        report.append(result)
-        if result.get('alive'):
-            return proxy_str, report
-    return None, report
 
 
 def resolve_link(element, base_url: str = "") -> str:
@@ -628,28 +615,14 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
     proxy_list = [p.strip() for p in re.split(r'[\n,]', proxy_raw) if p.strip()]
     require_proxy = parse_bool(payload.get("require_proxy"), default=bool(proxy_list))
 
-    # Validate & pick a live proxy
-    active_proxy: str | None = None
-    proxy_health_report: list[dict] = []
-    proxy_error: str | None = None
+    active_proxy: str | None = proxy_list[0] if proxy_list else None
 
-    if proxy_list:
-        active_proxy, proxy_health_report = _pick_live_proxy(proxy_list)
-        if active_proxy is None:
-            proxy_error = f"All {len(proxy_list)} proxy(ies) are dead: " + ", ".join(
-                f"{r['raw']} [{r.get('isp','?')}]" for r in proxy_health_report
-            )
-            if require_proxy:
-                return {
-                    "error": proxy_error,
-                    "proxy_health": proxy_health_report,
-                    "results": [],
-                    "summary": {"total_sites": 0, "fail_sites": 0, "pass_sites": 0},
-                }
-        else:
-            dead_count = sum(1 for r in proxy_health_report if not r.get('alive'))
-            if dead_count:
-                proxy_error = f"Skipped {dead_count} dead proxy(ies), using: {active_proxy}"
+    if require_proxy and not active_proxy:
+        return {
+            "error": "No proxy configured. Add proxies in the Proxy settings.",
+            "results": [],
+            "summary": {"total_sites": 0, "fail_sites": 0, "pass_sites": 0},
+        }
 
     site_list = [line.strip() for line in sites_raw.splitlines() if line.strip()]
     latest_domains = latest_domains or set()
@@ -658,8 +631,6 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
         site_result: dict = {"site": site_url, "refreshes": []}
         if active_proxy:
             site_result["proxy_used"] = active_proxy
-        if proxy_error:
-            site_result["proxy_warning"] = proxy_error
         driver = None
         redirect_checks_count = 0
 
@@ -873,8 +844,6 @@ def run_banner_check(payload: dict, latest_domains: set[str] | None = None) -> d
 
     return {
         "results": results,
-        "proxy_health": proxy_health_report if proxy_health_report else None,
-        "proxy_error": proxy_error,
         "summary": {
             "total_sites": total_sites,
             "pass_sites": pass_sites,

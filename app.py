@@ -237,6 +237,7 @@ def _save_proxies(proxies: list[str]) -> None:
         )
 
 
+
 @app.route("/api/proxies", methods=["GET"])
 def get_proxies():
     return jsonify({"proxies": _load_proxies()})
@@ -263,19 +264,6 @@ def banner_check():
 
     latest_domains = fetch_latest_domains(force=False)
     result = run_banner_check(payload, latest_domains=latest_domains)
-
-    # Remove dead proxies from DB
-    health = result.get("proxy_health") or []
-    if health:
-        dead = {r["raw"] for r in health if not r.get("alive")}
-        alive = [r["raw"] for r in health if r.get("alive")]
-        current = _load_proxies()
-        updated = [p for p in current if p not in dead]
-        for p in alive:
-            if p not in updated:
-                updated.append(p)
-        _save_proxies(updated)
-        result["proxy_list_updated"] = {"removed": list(dead), "remaining": len(updated)}
 
     filename = store.save(result)
     result["history_file"] = filename
