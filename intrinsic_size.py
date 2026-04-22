@@ -18,7 +18,6 @@ def get_intrinsic_size(
     """
     Download image from URL and return its actual (width, height) in pixels.
     Returns None if download or decode fails.
-    No proxy needed — images are served from public CDN.
     """
     if not img_url:
         if debug:
@@ -51,24 +50,3 @@ def get_intrinsic_size(
         if debug:
             print(f"  FAIL — {e}")
         return None
-
-
-def main() -> None:
-    if len(sys.argv) < 2:
-        print(__doc__)
-        sys.exit(0)
-
-    img_url = sys.argv[1].strip()
-    result = get_intrinsic_size(img_url, debug=True)
-
-    print()
-    if result:
-        print(f"{'─'*50}")
-        print(f"  intrinsic size: {result[0]}x{result[1]} px")
-        print(f"{'─'*50}")
-    else:
-        print("Failed to get intrinsic size.")
-
-
-if __name__ == "__main__":
-    main()
