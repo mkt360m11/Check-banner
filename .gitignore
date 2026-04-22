@@ -1,1 +1,6 @@
 .env
+__pycache__/
+*.pyc
+history/
+proxies.db
+ecosystem.config.js.DS_Store
