@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import os
-import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from typing import Optional
 
 import requests
-from PIL import Image # Pillow
+from PIL import Image  # Pillow
 
 REQUEST_TIMEOUT = int(os.getenv("WORKER_TIMEOUT", "15"))
 
-def get_intrinsic_size(
+def _get_intrinsic_size(
     img_url: str,
     *,
     debug: bool = False,
@@ -50,3 +50,20 @@ def get_intrinsic_size(
         if debug:
             print(f"  FAIL — {e}")
         return None
+
+
+def get_intrinsic_sizes_bulk(
+    urls: list[str],
+    *,
+    max_workers: int = 50,
+    debug: bool = False,
+) -> dict[str, Optional[tuple[int, int]]]:
+    """Run get_intrinsic_size concurrently for a list of URLs."""
+    results: dict[str, Optional[tuple[int, int]]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_to_url = {
+            pool.submit(_get_intrinsic_size, url, debug=debug): url for url in urls
+        }
+        for future in as_completed(future_to_url):
+            results[future_to_url[future]] = future.result()
+    return results
