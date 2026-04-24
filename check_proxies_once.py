@@ -46,7 +46,9 @@ def check_and_detect(p_dict: dict, timeout: int = 10) -> dict:
 
 def main() -> None:
     db = DBHelper()
-    proxies = db.get_active_proxies()
+    # Use generic filtered getter
+    proxies = db.get_filtered("proxy", {"stauts": "active"})
+    
     if not proxies:
         print("No active proxies found in MariaDB.")
         return
@@ -66,7 +68,8 @@ def main() -> None:
             print(f"  {status}  {result['raw']}  —  {result['isp']}, {result['country']}")
             
             if not alive:
-                db.update_proxy_status(result['id'], False)
+                # Use generic update method
+                db.update_record("proxy", result['id'], {"stauts": "dead"})
                 dead_count += 1
             else:
                 alive_count += 1

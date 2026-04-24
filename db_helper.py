@@ -2,8 +2,9 @@ import mysql.connector
 from mysql.connector import Error
 import os
 from dotenv import load_dotenv
-
-load_dotenv()
+# Find the absolute path to the .env file in the same directory as this script
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path)
 
 class DBHelper:
     def __init__(self):
@@ -27,7 +28,7 @@ class DBHelper:
             if self.connection.is_connected():
                 return self.connection
         except Error as e:
-            print(f"Error connecting to MySQL: {e}")
+            print(f"Error connecting to MySQL: {e} (Host: {self.host})")
             return None
 
     def execute_query(self, query, params=None, fetch=True):
@@ -57,18 +58,47 @@ class DBHelper:
         if self.connection and self.connection.is_connected():
             self.connection.close()
 
-    def get_active_proxies(self) -> list[dict]:
-        """Fetch all active proxies from the database."""
-        # Note: 'stauts' matches the typo in your DB schema
-        query = "SELECT id, ip, port, username, password FROM proxy WHERE stauts = 'active'"
-        rows = self.execute_query(query)
-        return rows if rows else []
+    # ── Generic CRUD Utilities ────────────────────────────────────────────────
 
-    def update_proxy_status(self, proxy_id: int, alive: bool):
-        """Update the status of a proxy (active/dead)."""
-        status = "active" if alive else "dead"
-        query = "UPDATE proxy SET stauts = %s WHERE id = %s"
-        self.execute_query(query, (status, proxy_id), fetch=False)
+    def get_all(self, table_name: str) -> list[dict]:
+        """Fetch all records from a specified table."""
+        query = f"SELECT * FROM {table_name}"
+        return self.execute_query(query)
+
+    def get_filtered(self, table_name: str, filters: dict) -> list[dict]:
+        """Fetch records with basic filtering. 'filters' is {column: value}."""
+        where_clause = " AND ".join([f"{col} = %s" for col in filters.keys()])
+        query = f"SELECT * FROM {table_name} WHERE {where_clause}"
+        return self.execute_query(query, tuple(filters.values()))
+
+    def get_by_id(self, table_name: str, record_id: int) -> dict | None:
+        """Fetch a single record by its ID."""
+        query = f"SELECT * FROM {table_name} WHERE id = %s"
+        rows = self.execute_query(query, (record_id,))
+        return rows[0] if rows else None
+
+    def add_record(self, table_name: str, data: dict) -> bool:
+        """Insert a new record into a table. 'data' is a dict of {column: value}."""
+        columns = ", ".join(data.keys())
+        placeholders = ", ".join(["%s"] * len(data))
+        query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+        return self.execute_query(query, tuple(data.values()), fetch=False)
+
+    def update_record(self, table_name: str, record_id: int, data: dict) -> bool:
+        """Update an existing record by ID."""
+        set_clause = ", ".join([f"{col} = %s" for col in data.keys()])
+        query = f"UPDATE {table_name} SET {set_clause} WHERE id = %s"
+        params = tuple(data.values()) + (record_id,)
+        return self.execute_query(query, params, fetch=False)
+
+    def delete_record(self, table_name: str, record_id: int) -> bool:
+        """Delete a record from a table by ID."""
+        query = f"SELECT id FROM {table_name} WHERE id = %s" # Check existence
+        if not self.execute_query(query, (record_id,)):
+            return False
+        
+        query = f"DELETE FROM {table_name} WHERE id = %s"
+        return self.execute_query(query, (record_id,), fetch=False)
 
 if __name__ == "__main__":
     # Test Discovery
