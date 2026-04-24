@@ -1,41 +1,27 @@
 from __future__ import annotations
-
 import os
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-
 import requests
 from dotenv import load_dotenv
+from db_helper import DBHelper
 
 load_dotenv()
 
-PROXY_DB = os.getenv("PROXY_DB", os.path.join(os.path.dirname(__file__), "proxies.db"))
 CHECK_TIMEOUT = int(os.getenv("PROXY_CHECK_TIMEOUT", "10"))
-
 
 # ── Proxy check ────────────────────────────────────────────────────────────────
 
-def _parse(proxy_str: str) -> dict | None:
-    parts = proxy_str.strip().split(":", 3)
-    if len(parts) < 2:
-        return None
-    return {
-        "raw": proxy_str,
-        "ip": parts[0],
-        "port": parts[1],
-        "user": parts[2] if len(parts) > 2 else "",
-        "pass": parts[3] if len(parts) > 3 else "",
-    }
+def _parse_dict(p: dict) -> str:
+    """Reconstruct proxy string from DB dict."""
+    if p['username'] and p['password']:
+        return f"{p['ip']}:{p['port']}:{p['username']}:{p['password']}"
+    return f"{p['ip']}:{p['port']}"
 
-
-def check_and_detect(proxy_str: str, timeout: int = 10) -> dict:
-    p = _parse(proxy_str)
-    if not p:
-        return {"raw": proxy_str, "alive": False, "isp": "Invalid", "country": ""}
-
-    auth = f"{p['user']}:{p['pass']}@" if p["user"] else ""
-    proxy_url = f"http://{auth}{p['ip']}:{p['port']}"
+def check_and_detect(p_dict: dict, timeout: int = 10) -> dict:
+    raw = _parse_dict(p_dict)
+    auth = f"{p_dict['username']}:{p_dict['password']}@" if p_dict['username'] else ""
+    proxy_url = f"http://{auth}{p_dict['ip']}:{p_dict['port']}"
     proxies = {"http": proxy_url, "https": proxy_url}
 
     for test_url in ["https://ipinfo.io/json", "http://ip-api.com/json"]:
@@ -45,7 +31,8 @@ def check_and_detect(proxy_str: str, timeout: int = 10) -> dict:
             if r.status_code == 200:
                 data = r.json()
                 return {
-                    "raw": proxy_str,
+                    "id": p_dict['id'],
+                    "raw": raw,
                     "alive": True,
                     "isp": data.get("isp", data.get("org", "?")),
                     "country": data.get("country", data.get("countryCode", "?")),
@@ -53,33 +40,18 @@ def check_and_detect(proxy_str: str, timeout: int = 10) -> dict:
         except Exception:
             continue
 
-    return {"raw": proxy_str, "alive": False, "isp": "?", "country": "?"}
-
-
-# ── Load from DB ───────────────────────────────────────────────────────────────
-
-def load_proxies() -> list[str]:
-    """Load dashboard proxies (chat_id='') from proxies.db."""
-    try:
-        with sqlite3.connect(PROXY_DB) as conn:
-            rows = conn.execute(
-                "SELECT proxy FROM proxies WHERE chat_id = '' ORDER BY id"
-            ).fetchall()
-        return [r[0] for r in rows]
-    except Exception as e:
-        print(f"[DB] Error: {e}")
-        return []
-
+    return {"id": p_dict['id'], "raw": raw, "alive": False, "isp": "?", "country": "?"}
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    proxies = load_proxies()
+    db = DBHelper()
+    proxies = db.get_active_proxies()
     if not proxies:
-        print("No proxies found in proxies.db.")
+        print("No active proxies found in MariaDB.")
         return
 
-    print(f"Checking {len(proxies)} proxy(ies) — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    print(f"Checking {len(proxies)} proxy(ies) from MariaDB — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
     alive_count = 0
     dead_count = 0
@@ -90,14 +62,19 @@ def main() -> None:
             result = future.result()
             alive = result.get("alive", False)
             status = "✅ alive" if alive else "❌ dead "
+            
             print(f"  {status}  {result['raw']}  —  {result['isp']}, {result['country']}")
-            if alive:
-                alive_count += 1
-            else:
+            
+            if not alive:
+                db.update_proxy_status(result['id'], False)
                 dead_count += 1
+            else:
+                alive_count += 1
 
+    db.close()
     print(f"\nResult: {alive_count} alive, {dead_count} dead out of {len(proxies)} total.")
-
+    if dead_count > 0:
+        print(f"Note: {dead_count} dead proxies have been marked as 'dead' in MariaDB.")
 
 if __name__ == "__main__":
     main()
